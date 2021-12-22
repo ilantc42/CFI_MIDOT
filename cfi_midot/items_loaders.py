@@ -18,7 +18,11 @@ RESOURCE_NAME_TO_METHOD_NAME = {
 def _map_between_scraped_and_ngo_item(data_mapper: dict, scraped_data: dict) -> dict:
     ngo_item_data = {}
     for malkar_attr_name, ngo_attr_name in data_mapper.items():
-        ngo_item_data[ngo_attr_name] = scraped_data.pop(malkar_attr_name)
+        scraped_data_value = scraped_data.get(malkar_attr_name)
+        if scraped_data_value is None:
+            logger.warning(f"Missing {malkar_attr_name} in scraped NGO data")
+            continue
+        ngo_item_data[ngo_attr_name] = scraped_data_value
     return ngo_item_data
 
 
