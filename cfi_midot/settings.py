@@ -16,6 +16,7 @@ NEWSPIDER_MODULE = "cfi_midot.spiders"
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 # USER_AGENT = 'cfi_midot (+http://www.yourdomain.com)'
 
+FEED_EXPORT_ENCODING = "utf-8"
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
 

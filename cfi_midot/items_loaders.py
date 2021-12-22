@@ -1,3 +1,5 @@
+import logging
+
 from cfi_midot.items import (
     NgoInfo,
     NgoGeneralInfo,
@@ -5,6 +7,9 @@ from cfi_midot.items import (
     NgoTopRecipientSalary,
     NgoTopRecipientsSalaries,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 RESOURCE_NAME_TO_METHOD_NAME = {
@@ -31,6 +36,9 @@ def _malkar_details_parser(scraped_data) -> NgoGeneralInfo:
         "Name": "ngo_name",
         "orgGoal": "ngo_goal",
         "orgYearFounded": "ngo_year_founded",
+        "volunteers": "volunteers_num",
+        "employees": "employees_num",
+        "members": "ngo_members_num",
         # TODO add more fields
     }
     ngo_general = _map_between_scraped_and_ngo_item(general_data_mapper, scraped_data)
@@ -49,10 +57,10 @@ def _malkar_finance_parser(scraped_data) -> NgoFinanceInfo:
         "Donations_Country": "donations_from_israel",
         "Donations_ValueForMoney": "donations_value_for_money",
         "Expenses_Other": "expenses_other",
-        "Expenses_OtherActivities": "expenses_for_activities",
+        "Expenses_OtherActivities": "other_expenses_for_activities",
         "Expenses_OtherManagement": "expenses_for_management",
         "Expenses_Salary": "expenses_salary_For_management",
-        "Expenses_SalaryActivities": "expenses_salary_For_activities",
+        "Expenses_SalaryActivities": "expenses_salary_for_activities",
         "Incomes_MembersFee": "other_income_members_fee",
         "Incomes_OtherSource": "other_income_from_other_sources",
         "Incomes_ServicesForCountry": "service_income_from_country",
