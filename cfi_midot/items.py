@@ -15,26 +15,22 @@ class NgoTopRecipientSalary:
 
 @dataclass(frozen=True)
 class NgoTopRecipientsSalaries:
-    resource_name: str = field(default="top_earners_info", init=False)
     top_earners_salaries: list[NgoTopRecipientSalary]
     report_year: int
 
 
 @dataclass(frozen=True)
 class NgoGeneralInfo:
-    resource_name: str = field(default="general_info", init=False)
-
     ngo_name: str
     ngo_goal: str
     ngo_year_founded: int
-    volunteers_num: int
-    employees_num: int
-    ngo_members_num: int
+    volunteers_num: Optional[int] = field(default=None)
+    employees_num: Optional[int] = field(default=None)
+    ngo_members_num: Optional[int] = field(default=None)
 
 
 @dataclass
 class NgoFinanceInfo:
-    resource_name: str = field(default="financial_info", init=False)
     report_year: int
 
     allocations_from_government: int
@@ -55,9 +51,9 @@ class NgoFinanceInfo:
     other_income_from_other_sources: int
     other_income_members_fee: int
 
-    expenses_salary_for_activities: Optional[int] = field(default=0)
-    other_expenses_for_activities: Optional[int] = field(default=0)
-    donations_value_for_money: Optional[int] = field(default=0)
+    expenses_salary_for_activities: int = field(default=0)
+    other_expenses_for_activities: int = field(default=0)
+    donations_value_for_money: int = field(default=0)
 
     @property
     def total_allocations(self) -> int:
@@ -126,8 +122,8 @@ class NgoInfo:
     ngo_id: int
 
     general_info: NgoGeneralInfo
-    financial_info: NgoFinanceInfo
-    top_earners_info: NgoTopRecipientsSalaries
+    financial_info: Optional[NgoFinanceInfo] = field(default=None)
+    top_earners_info: Optional[NgoTopRecipientsSalaries] = field(default=None)
 
     @classmethod
     def from_resource_items(cls, ngo_id: int, resources_items: dict) -> "NgoInfo":

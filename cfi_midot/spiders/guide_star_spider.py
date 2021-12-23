@@ -1,9 +1,12 @@
+import logging
 import json
-from typing import Callable
+from typing import Callable, Union
 import scrapy
 import re
 from cfi_midot.items import NgoInfo
 from cfi_midot.items_loaders import RESOURCE_NAME_TO_METHOD_NAME, load_ngo_info
+
+logger = logging.getLogger(__name__)
 
 
 HEADERS = {
@@ -56,6 +59,18 @@ def generate_body_payload(
     return body_payload
 
 
+def _parse_ngo_ids(ngo_ids: Union[list[int], str]) -> list[int]:
+    try:
+        if isinstance(ngo_ids, str):
+            return [int(ngo_id) for ngo_id in ngo_ids.split(",")]
+        elif isinstance(ngo_ids, list):
+            return list(map(int, ngo_ids))
+    except ValueError:
+        raise ValueError(f"Could not parse ngo ids from argument: {ngo_ids}")
+    finally:
+        []
+
+
 class GuideStarSpider(scrapy.Spider):
     name = "guidestar"
     # URL to get ngo data
@@ -63,31 +78,42 @@ class GuideStarSpider(scrapy.Spider):
 
     # NGO resources to be scraped
     resources = [
-        "general",
-        "finance",
-        "top_salaries",
+        "general_info",
+        "financial_info",
+        "top_earners_info",
     ]
 
-    def __init__(self, ngo_id: int, **kwargs) -> None:
-        self.ngo_id = ngo_id
-        # Used to build body_payload for ngo_data request
-        self.helper_page_url = f"https://www.guidestar.org.il/organization/{ngo_id}"
-        HEADERS["Referer"] = self.helper_page_url
-
+    def __init__(self, ngo_ids: Union[list[int], str], **kwargs) -> None:
+        self.ngo_ids = _parse_ngo_ids(ngo_ids)
         super().__init__(**kwargs)
 
-    def request(self, url: str, callback: Callable) -> scrapy.Request:
-        request = scrapy.Request(url=url, callback=callback)
+    def request(self, url: str, ngo_id: int, callback: Callable) -> scrapy.Request:
+        request = scrapy.Request(url=url, callback=callback, meta={"ngo_id": ngo_id})
+
+        # Mutates headers
+        HEADERS["Referer"] = url
+        # Set user agenet to avoid 403
         request.headers["User-Agent"] = HEADERS["User-Agent"]
+
         return request
 
     def start_requests(self) -> scrapy.Request:
-        yield self.request(self.helper_page_url, self.scrape_xml_data)
+
+        for ngo_id in self.ngo_ids:
+            # Used to build body_payload for ngo_data request
+            helper_page_url = f"https://www.guidestar.org.il/organization/{ngo_id}"
+
+            yield self.request(
+                url=helper_page_url,
+                ngo_id=ngo_id,
+                callback=self.scrape_xml_data,
+            )
 
     def scrape_xml_data(self, helper_page_response) -> scrapy.Request:
 
+        ngo_id = helper_page_response.meta["ngo_id"]
         body_payload = generate_body_payload(
-            self.resources, self.ngo_id, helper_page_response.text
+            self.resources, ngo_id, helper_page_response.text
         )
 
         yield scrapy.Request(
@@ -96,16 +122,20 @@ class GuideStarSpider(scrapy.Spider):
             body=json.dumps(body_payload),
             headers=HEADERS,
             callback=self.parse_ngo_response,
+            meta=helper_page_response.meta,
         )
 
     def parse_ngo_response(self, response) -> NgoInfo:
+        ngo_id = response.meta["ngo_id"]
+        logger.info(f"Starting Parsing of xml_data for {ngo_id}")
         ngo_scraped_data = response.json()
-        self._validate_all_resources_arrived_successfully(ngo_scraped_data)
-        ngo_info_item = load_ngo_info(self.ngo_id, ngo_scraped_data)
+        self._validate_all_resources_arrived_successfully(ngo_scraped_data, ngo_id)
+        ngo_info_item = load_ngo_info(ngo_id, ngo_scraped_data)
+        logger.info(f"Finish Parsing xml_data for {ngo_id}")
         yield ngo_info_item
 
     def _validate_all_resources_arrived_successfully(
-        self, ngo_scraped_data: list[dict]
+        self, ngo_scraped_data: list[dict], ngo_id: int
     ) -> None:
 
         if len(ngo_scraped_data) != len(self.resources):
@@ -113,9 +143,13 @@ class GuideStarSpider(scrapy.Spider):
 
         for scraped_resource in ngo_scraped_data:
             if scraped_resource["statusCode"] != 200:
-                raise Exception(f"Error in resource {scraped_resource['method']}")
+                raise Exception(
+                    f"Failed to scrap ngo: {ngo_id}, Returned status code: {scraped_resource['statusCode']}"
+                )
             if not scraped_resource["result"]["success"]:
-                raise Exception(f"Error in resource {scraped_resource['method']}")
+                raise Exception(
+                    f"Failed to scrap ngo: {ngo_id}. Failed to get one or more malkar resources"
+                )
 
 
 # TODO:Remove DEBUG
@@ -124,5 +158,5 @@ if __name__ == "__main__":
     from scrapy.utils.project import get_project_settings
 
     process = CrawlerProcess(get_project_settings())
-    process.crawl(GuideStarSpider, 580030104)
+    process.crawl(GuideStarSpider, "580030104,580654705")
     process.start()

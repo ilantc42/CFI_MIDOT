@@ -8,8 +8,8 @@ pip install -e .
 
 ### Scrape NGO
 ```bash
-# Crawl NGO data from GuideStar
+# Crawl NGOs data from GuideStar
 # NOTE: We only scrape last reported year data at the moment
-scrapy crawl guidestar -a ngo_id=<ngo_id> -O <output_file> 
+scrapy crawl guidestar -a ngo_ids="<ngo_id_1>,<ngo_id_2>" -O <output_file> 
 
 ```
