@@ -1,13 +1,13 @@
-import logging
 import json
-from typing import Callable, Union
-import scrapy
+import logging
 import re
+from typing import Callable, Iterator, Union
+
+import scrapy
 from cfi_midot.items import NgoInfo
 from cfi_midot.items_loaders import RESOURCE_NAME_TO_METHOD_NAME, load_ngo_info
 
 logger = logging.getLogger(__name__)
-
 
 HEADERS = {
     "X-User-Agent": "Visualforce-Remoting",
@@ -65,10 +65,8 @@ def _parse_ngo_ids(ngo_ids: Union[list[int], str]) -> list[int]:
             return [int(ngo_id) for ngo_id in ngo_ids.split(",")]
         elif isinstance(ngo_ids, list):
             return list(map(int, ngo_ids))
-    except ValueError:
-        raise ValueError(f"Could not parse ngo ids from argument: {ngo_ids}")
-    finally:
-        []
+    except ValueError as err:
+        raise ValueError(f"Could not parse ngo ids from argument: {ngo_ids}") from err
 
 
 class GuideStarSpider(scrapy.Spider):
@@ -97,8 +95,7 @@ class GuideStarSpider(scrapy.Spider):
 
         return request
 
-    def start_requests(self) -> scrapy.Request:
-
+    def start_requests(self) -> Iterator[scrapy.Request]:
         for ngo_id in self.ngo_ids:
             # Used to build body_payload for ngo_data request
             helper_page_url = f"https://www.guidestar.org.il/organization/{ngo_id}"
@@ -109,8 +106,7 @@ class GuideStarSpider(scrapy.Spider):
                 callback=self.scrape_xml_data,
             )
 
-    def scrape_xml_data(self, helper_page_response) -> scrapy.Request:
-
+    def scrape_xml_data(self, helper_page_response) -> Iterator[scrapy.Request]:
         ngo_id = helper_page_response.meta["ngo_id"]
         body_payload = generate_body_payload(
             self.resources, ngo_id, helper_page_response.text
@@ -121,17 +117,18 @@ class GuideStarSpider(scrapy.Spider):
             method="POST",
             body=json.dumps(body_payload),
             headers=HEADERS,
-            callback=self.parse_ngo_response,
+            callback=self.parse,
             meta=helper_page_response.meta,
         )
 
-    def parse_ngo_response(self, response) -> NgoInfo:
+    def parse(self, response, **kwargs) -> Iterator[NgoInfo]:
+        """Parse NGO data from response"""
         ngo_id = response.meta["ngo_id"]
-        logger.info(f"Starting Parsing of xml_data for {ngo_id}")
+        logger.info("Starting Parsing of xml_data for: %s", ngo_id)
         ngo_scraped_data = response.json()
         self._validate_all_resources_arrived_successfully(ngo_scraped_data, ngo_id)
         ngo_info_item = load_ngo_info(ngo_id, ngo_scraped_data)
-        logger.info(f"Finish Parsing xml_data for {ngo_id}")
+        logger.info("Finish Parsing xml_data for: %s", ngo_id)
         yield ngo_info_item
 
     def _validate_all_resources_arrived_successfully(

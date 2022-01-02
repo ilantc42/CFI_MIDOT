@@ -3,70 +3,81 @@
 # See documentation in:
 # https://docs.scrapy.org/en/latest/topics/items.html
 
-from typing import Optional
+from typing import Optional, Union
+
 import attr
+from attrs_strict import type_validator
 
 
-@attr.s(frozen=True, auto_attribs=True)
+def _add_type_validator(cls, fields):
+    validated_fields = []
+    for field in fields:
+        if field.validator is not None:
+            validated_fields.append(field)
+            continue
+        validated_fields.append(field.evolve(validator=type_validator()))
+    return validated_fields
+
+
+@attr.s(frozen=True, auto_attribs=True, field_transformer=_add_type_validator)
 class NgoTopRecipientSalary:
     recipient_title: str
     gross_salary_in_nis: float
 
 
-@attr.s(frozen=True, auto_attribs=True)
+@attr.s(frozen=True, auto_attribs=True, field_transformer=_add_type_validator)
 class NgoTopRecipientsSalaries:
     top_earners_salaries: list[NgoTopRecipientSalary]
     report_year: int
 
 
-@attr.s(frozen=True, auto_attribs=True)
+@attr.s(frozen=True, auto_attribs=True, field_transformer=_add_type_validator)
 class NgoGeneralInfo:
     ngo_name: str
-    ngo_goal: str
     ngo_year_founded: int
+    ngo_goal: str = attr.ib(default="")
     volunteers_num: Optional[int] = attr.ib(default=None)
     employees_num: Optional[int] = attr.ib(default=None)
     ngo_members_num: Optional[int] = attr.ib(default=None)
 
 
-@attr.s(frozen=True, auto_attribs=True)
+@attr.s(frozen=True, auto_attribs=True, field_transformer=_add_type_validator)
 class NgoFinanceInfo:
     report_year: int
 
-    allocations_from_government: int
-    allocations_from_local_authority: int
-    allocations_from_other_sources: int
+    allocations_from_government: Union[int, float]
+    allocations_from_local_authority: Union[int, float]
+    allocations_from_other_sources: Union[int, float]
 
-    donations_from_aboard: int
-    donations_from_israel: int
+    donations_from_aboard: Union[int, float]
+    donations_from_israel: Union[int, float]
 
-    expenses_other: int
-    expenses_for_management: int
-    expenses_salary_For_management: int
+    service_income_from_country: Union[int, float]
+    service_income_from_local_authority: Union[int, float]
+    service_income_from_other: Union[int, float]
 
-    service_income_from_country: int
-    service_income_from_local_authority: int
-    service_income_from_other: int
+    other_income_from_other_sources: Union[int, float]
+    other_income_members_fee: Union[int, float]
 
-    other_income_from_other_sources: int
-    other_income_members_fee: int
-
-    expenses_salary_for_activities: int = attr.ib(default=0)
-    other_expenses_for_activities: int = attr.ib(default=0)
-    donations_value_for_money: int = attr.ib(default=0)
+    expenses_other: Union[int, float] = attr.ib(default=0)
+    expenses_for_management: Union[int, float] = attr.ib(default=0)
+    expenses_salary_for_management: Union[int, float] = attr.ib(default=0)
+    expenses_salary_for_activities: Union[int, float] = attr.ib(default=0)
+    other_expenses_for_activities: Union[int, float] = attr.ib(default=0)
+    donations_value_for_money: Union[int, float] = attr.ib(default=0)
 
     # ------------ Computed ------------
-    total_allocations: int = attr.ib(init=False)
-    total_donations: int = attr.ib(init=False)
-    total_expenses: int = attr.ib(init=False)
-    total_service_income: int = attr.ib(init=False)
-    total_other_income: int = attr.ib(init=False)
+    total_allocations: Union[int, float] = attr.ib(init=False)
+    total_donations: Union[int, float] = attr.ib(init=False)
+    total_expenses: Union[int, float] = attr.ib(init=False)
+    total_service_income: Union[int, float] = attr.ib(init=False)
+    total_other_income: Union[int, float] = attr.ib(init=False)
     # ------------ Ratios ------------
     program_expense_ratio: Optional[float] = attr.ib(init=False)
     administrative_expense_ratio: Optional[float] = attr.ib(init=False)
 
     @total_allocations.default
-    def _total_allocations(self) -> int:
+    def _total_allocations(self) -> Union[int, float]:
         return (
             self.allocations_from_government
             + self.allocations_from_local_authority
@@ -74,21 +85,21 @@ class NgoFinanceInfo:
         )
 
     @total_donations.default
-    def _total_donations(self) -> int:
+    def _total_donations(self) -> Union[int, float]:
         return self.donations_from_aboard + self.donations_from_israel
 
     @total_expenses.default
-    def _total_expenses(self) -> int:
+    def _total_expenses(self) -> Union[int, float]:
         return (
             self.expenses_other
             + self.other_expenses_for_activities
             + self.expenses_for_management
-            + self.expenses_salary_For_management
+            + self.expenses_salary_for_management
             + self.expenses_salary_for_activities
         )
 
     @total_service_income.default
-    def _total_service_income(self) -> int:
+    def _total_service_income(self) -> Union[int, float]:
         return (
             self.service_income_from_country
             + self.service_income_from_local_authority
@@ -96,7 +107,7 @@ class NgoFinanceInfo:
         )
 
     @total_other_income.default
-    def _total_other_income(self) -> int:
+    def _total_other_income(self) -> Union[int, float]:
         return self.other_income_from_other_sources + self.other_income_members_fee
 
     # ------------ Ratios ------------
@@ -116,7 +127,7 @@ class NgoFinanceInfo:
     def _administrative_expense_ratio(self) -> Optional[float]:
 
         total_administrative_expenses = (
-            self.expenses_salary_For_management
+            self.expenses_salary_for_management
             + self.expenses_for_management
             + self.expenses_other
         )
@@ -127,7 +138,7 @@ class NgoFinanceInfo:
         return (total_administrative_expenses / self.total_expenses) * 100
 
 
-@attr.s(frozen=True, auto_attribs=True)
+@attr.s(frozen=True, auto_attribs=True, field_transformer=_add_type_validator)
 class NgoInfo:
     ngo_id: int
 

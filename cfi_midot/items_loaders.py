@@ -2,13 +2,12 @@ import logging
 from typing import Optional
 
 from cfi_midot.items import (
-    NgoInfo,
-    NgoGeneralInfo,
     NgoFinanceInfo,
+    NgoGeneralInfo,
+    NgoInfo,
     NgoTopRecipientSalary,
     NgoTopRecipientsSalaries,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,6 @@ RESOURCE_NAME_TO_METHOD_NAME = {
     "general_info": "getMalkarDetails",
     "financial_info": "getMalkarFinances",
     "top_earners_info": "getMalkarWageEarners",
-    # "donations": "getMalkarDonations",
 }
 
 
@@ -29,7 +27,7 @@ def _map_between_scraped_and_ngo_item(data_mapper: dict, scraped_data: dict) -> 
     for malkar_attr_name, ngo_attr_name in data_mapper.items():
         scraped_data_value = scraped_data.get(malkar_attr_name)
         if scraped_data_value is None:
-            logger.warning(f"Missing {malkar_attr_name} in scraped NGO data")
+            logger.warning("Missing %s in scraped NGO data", malkar_attr_name)
             continue
         ngo_item_data[ngo_attr_name] = scraped_data_value
     return ngo_item_data
@@ -62,7 +60,7 @@ def _malkar_finance_parser(scraped_data: list[dict], ngo_id: int) -> NgoFinanceI
         "Expenses_Other": "expenses_other",
         "Expenses_OtherActivities": "other_expenses_for_activities",
         "Expenses_OtherManagement": "expenses_for_management",
-        "Expenses_Salary": "expenses_salary_For_management",
+        "Expenses_Salary": "expenses_salary_for_management",
         "Expenses_SalaryActivities": "expenses_salary_for_activities",
         "Incomes_MembersFee": "other_income_members_fee",
         "Incomes_OtherSource": "other_income_from_other_sources",
@@ -93,7 +91,7 @@ def _malkar_wage_earners_parser(
     top_earners_salaries = []
     scraped_earners_salaries = scraped_data_from_last_year.get("Data")
     if scraped_earners_salaries is None:
-        logger.warning(f"No information about top earners salaries for {ngo_id}")
+        logger.warning("No information about top earners salaries for: %s", ngo_id)
         return None
     for earner_salary in scraped_earners_salaries:
         earner_salary_data = _map_between_scraped_and_ngo_item(
@@ -123,7 +121,7 @@ def load_ngo_info(ngo_id: int, ngo_scraped_result: list[dict]) -> NgoInfo:
         scraped_data = scraped_result["result"]["result"]
         if not scraped_data:
             logger.warning(
-                f"Missing scraped data for {ngo_id}, {scraped_result['method']}"
+                "Missing scraped data for %s, %s", ngo_id, scraped_result["method"]
             )
             continue
         resource_item = parser(scraped_data, ngo_id)
