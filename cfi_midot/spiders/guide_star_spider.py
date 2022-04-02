@@ -124,11 +124,12 @@ class GuideStarSpider(scrapy.Spider):
     def parse(self, response, **kwargs) -> Iterator[NgoInfo]:
         """Parse NGO data from response"""
         ngo_id = response.meta["ngo_id"]
-        logger.info("Starting Parsing of xml_data for: %s", ngo_id)
+        logger.debug("Starting Parsing of xml_data for: %s", ngo_id)
         ngo_scraped_data = response.json()
         self._validate_all_resources_arrived_successfully(ngo_scraped_data, ngo_id)
         ngo_info_item = load_ngo_info(ngo_id, ngo_scraped_data)
-        logger.info("Finish Parsing xml_data for: %s", ngo_id)
+        logger.debug("Finish Parsing xml_data for: %s", ngo_id)
+
         yield ngo_info_item
 
     def _validate_all_resources_arrived_successfully(
@@ -147,13 +148,3 @@ class GuideStarSpider(scrapy.Spider):
                 raise Exception(
                     f"Failed to scrap ngo: {ngo_id}. Failed to get one or more malkar resources"
                 )
-
-
-# TODO:Remove DEBUG
-if __name__ == "__main__":
-    from scrapy.crawler import CrawlerProcess
-    from scrapy.utils.project import get_project_settings
-
-    process = CrawlerProcess(get_project_settings())
-    process.crawl(GuideStarSpider, "580030104,580654705")
-    process.start()

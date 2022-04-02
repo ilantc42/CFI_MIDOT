@@ -63,9 +63,9 @@ ROBOTSTXT_OBEY = True
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-# ITEM_PIPELINES = {
-#    'cfi_midot.pipelines.CfimidotPipeline': 300,
-# }
+ITEM_PIPELINES = {
+    "cfi_midot.pipelines.GuideStarMultiCSVExporter": 300,
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
