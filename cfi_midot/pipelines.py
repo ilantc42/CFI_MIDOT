@@ -1,13 +1,13 @@
 from scrapy.exporters import CsvItemExporter
 
 from cfi_midot.items import (
-    NgoFinanceInfo,
     NgoFinanceInfoSchema,
-    NgoGeneralInfo,
     NgoInfo,
-    NGOInfoSchema,
-    NgoTopRecipientsSalariesSchema,
+    UnrankedNGOResult,
 )
+from os import environ
+
+UNRANKED_FNAME = environ["UNRANKED_NGO_FNAME"]
 
 
 def item_type(item):
@@ -15,7 +15,7 @@ def item_type(item):
 
 
 class GuideStarMultiCSVExporter(object):
-    defined_items = ["NGOInfoSchema", "NgoFinanceInfo", "NgoTopRecipientsSalaries"]
+    defined_items = [UNRANKED_FNAME, "NgoFinanceInfo", "NgoTopRecipientsSalaries", "filtered_ngos"]
 
     def open_spider(self, spider):
         self.files = dict(
@@ -29,7 +29,7 @@ class GuideStarMultiCSVExporter(object):
             exporter.start_exporting()
 
     def _multi_exporter_for_item(self, item: NgoInfo) -> None:
-        self.exporters["NGOInfoSchema"].export_item(NGOInfoSchema().dump(item))
+        self.exporters["UnrankedNGOResult"].export_item(UnrankedNGOResult().dump(item))
 
         if item.financial_info:
             financial_info = NgoFinanceInfoSchema(many=True).dump(item.financial_info)
@@ -47,6 +47,9 @@ class GuideStarMultiCSVExporter(object):
         [e.finish_exporting() for e in self.exporters.values()]
         [f.close() for f in self.files.values()]
 
-    def process_item(self, item: NgoInfo, spider):
-        self._multi_exporter_for_item(item)
+    def process_item(self, item: NgoInfo | dict, spider):
+        if isinstance(item, dict):
+            self.exporters["filtered_ngos"].export_item(item)
+        else:
+            self._multi_exporter_for_item(item)
         return item

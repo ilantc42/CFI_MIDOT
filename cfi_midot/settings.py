@@ -66,6 +66,10 @@ ROBOTSTXT_OBEY = True
 ITEM_PIPELINES = {
     "cfi_midot.pipelines.GuideStarMultiCSVExporter": 300,
 }
+LOG_LEVEL = 'INFO'
+CONCURRENT_REQUESTS = 400
+REACTOR_THREADPOOL_MAXSIZE = 80
+
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html

@@ -78,7 +78,7 @@ class GuideStarSpider(scrapy.Spider):
     resources = [
         "general_info",
         "financial_info",
-        "top_earners_info",
+        # "top_earners_info",
     ]
 
     def __init__(self, ngo_ids: Union[list[int], str], **kwargs) -> None:
@@ -121,7 +121,7 @@ class GuideStarSpider(scrapy.Spider):
             meta=helper_page_response.meta,
         )
 
-    def parse(self, response, **kwargs) -> Iterator[NgoInfo]:
+    def parse(self, response, **kwargs) -> Iterator[NgoInfo | dict]:
         """Parse NGO data from response"""
         ngo_id = response.meta["ngo_id"]
         logger.debug("Starting Parsing of xml_data for: %s", ngo_id)

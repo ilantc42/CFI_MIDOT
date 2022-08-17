@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from cfi_midot.items import (
     NgoFinanceInfo,
@@ -7,7 +6,6 @@ from cfi_midot.items import (
     NgoInfo,
     NgoTopRecipientSalary,
     NgoTopRecipientsSalaries,
-    TurnoverCategory,
 )
 
 logger = logging.getLogger(__name__)
@@ -17,7 +15,6 @@ RESOURCE_NAME_TO_METHOD_NAME = {
     "general_info": "getMalkarDetails",
     "financial_info": "getMalkarFinances",
     "top_earners_info": "getMalkarWageEarners",
-    "test": "getMalkarAuthorizedPeople",
 }
 
 
@@ -62,6 +59,7 @@ def _malkar_finance_parser(
         "Donations_Country": "donations_from_israel",
         "Donations_ValueForMoney": "donations_of_monetary_value",
         "Expenses_Other": "expenses_other",
+        "Expenses_Activities": "expenses_for_activities",
         "Expenses_OtherActivities": "other_expenses_for_activities",
         "Expenses_OtherManagement": "expenses_for_management",
         "Expenses_Salary": "expenses_salary_for_management",
@@ -124,7 +122,7 @@ METHOD_NAME_TO_ITEM_PARSER = {
 }
 
 
-def load_ngo_info(ngo_id: int, ngo_scraped_result: list[dict]) -> Optional[NgoInfo]:
+def load_ngo_info(ngo_id: int, ngo_scraped_result: list[dict]) -> NgoInfo | dict:
     resource_items = {}
     for scraped_result in ngo_scraped_result:
         scraped_data = scraped_result["result"]["result"]
@@ -144,18 +142,17 @@ def load_ngo_info(ngo_id: int, ngo_scraped_result: list[dict]) -> Optional[NgoIn
 
     ngo_item = NgoInfo.from_resource_items(ngo_id, resource_items)
 
-    if not should_filter_out_ngo(ngo_item):
-        return ngo_item
+    if _should_filter_out_ngo(ngo_item):
+        logger.debug("Filtering out ngo %s", ngo_item.ngo_id)
+        return dict(ngo_id=ngo_item.ngo_id)
+
+    return ngo_item
 
 
-def should_filter_out_ngo(ngo_info: NgoInfo) -> bool:
-    if (
-        not ngo_info.last_financial_info
-        or not ngo_info.last_financial_info.yearly_turnover_category
-        or ngo_info.last_financial_info.yearly_turnover_category
-        < TurnoverCategory.CAT_3M
-    ):
-        logger.info("Filtering out ngo %s", ngo_info.ngo_id)
-        return True
-
-    return False
+def _should_filter_out_ngo(ngo_item: NgoInfo) -> bool:
+    return (
+        not ngo_item.last_financial_info
+        or not ngo_item.last_financial_info.yearly_turnover_category
+        or ngo_item.last_financial_report_year not in (2021, 2020)
+        or ngo_item.last_financial_info.yearly_turnover < 100_000
+    )
