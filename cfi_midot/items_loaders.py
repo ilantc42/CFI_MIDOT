@@ -45,7 +45,7 @@ def _malkar_details_parser(scraped_data: dict, ngo_id: int) -> NgoGeneralInfo:
         "audience": "target_audience",
     }
     ngo_general = _map_between_scraped_and_ngo_item(general_data_mapper, scraped_data)
-    return NgoGeneralInfo(**ngo_general)
+    return NgoGeneralInfo(ngo_id=ngo_id, **ngo_general)
 
 
 def _malkar_finance_parser(
@@ -75,7 +75,7 @@ def _malkar_finance_parser(
     ngo_finance_objects = []
     for data in scraped_data:
         ngo_finance_pyaload = _map_between_scraped_and_ngo_item(
-            finance_data_mapper, data
+            finance_data_mapper, data  
         )
         ngo_finance_objects.append(NgoFinanceInfo(ngo_id=ngo_id, **ngo_finance_pyaload))
     return ngo_finance_objects
@@ -153,6 +153,6 @@ def _should_filter_out_ngo(ngo_item: NgoInfo) -> bool:
     return (
         not ngo_item.last_financial_info
         or not ngo_item.last_financial_info.yearly_turnover_category
-        or ngo_item.last_financial_report_year not in (2021, 2020)
+        # or ngo_item.last_financial_report_year not in (2021, 2020)
         or ngo_item.last_financial_info.yearly_turnover < 100_000
     )

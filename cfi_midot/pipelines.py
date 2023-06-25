@@ -2,12 +2,11 @@ from scrapy.exporters import CsvItemExporter
 
 from cfi_midot.items import (
     NgoFinanceInfoSchema,
+    NgoGeneralInfoSchema,
     NgoInfo,
-    UnrankedNGOResult,
 )
 from os import environ
 
-UNRANKED_FNAME = environ["UNRANKED_NGO_FNAME"]
 
 
 def item_type(item):
@@ -15,7 +14,8 @@ def item_type(item):
 
 
 class GuideStarMultiCSVExporter(object):
-    defined_items = [UNRANKED_FNAME, "NgoFinanceInfo", "NgoTopRecipientsSalaries", "filtered_ngos"]
+    defined_items = ["NgoFinanceInfo", "NgoTopRecipientsSalaries", 
+                     "filtered_ngos", "NgoGeneralInfo"]
 
     def open_spider(self, spider):
         self.files = dict(
@@ -29,12 +29,15 @@ class GuideStarMultiCSVExporter(object):
             exporter.start_exporting()
 
     def _multi_exporter_for_item(self, item: NgoInfo) -> None:
-        self.exporters["UnrankedNGOResult"].export_item(UnrankedNGOResult().dump(item))
 
         if item.financial_info:
             financial_info = NgoFinanceInfoSchema(many=True).dump(item.financial_info)
             for report in financial_info:
                 self.exporters["NgoFinanceInfo"].export_item(report)
+
+        if item.general_info:
+            general_info = NgoGeneralInfoSchema().dump(item.general_info)
+            self.exporters["NgoGeneralInfo"].export_item(general_info)
 
         # if item.top_earners_info:
         #     top_earners_info = NgoTopRecipientsSalariesSchema(many=True).dump(

@@ -26,6 +26,7 @@ def _get_csrf(page_text):
     csrf_re = re.compile(
         r'\{"name":"getUserInfo","len":0,"ns":"","ver":43\.0,"csrf":"([^"]+)"\}'
     )
+    return "VmpFPSxNakF4T0Mwd05DMHhNMVF3TnpvMU16b3lOaTR5TkRGYSxyWk4waExQQ09WeTJJNnVPMWJuV3IzLFpXWTNaRFkz"
     csrf, *_ = csrf_re.findall(page_text)
     return csrf
 

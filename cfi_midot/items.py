@@ -14,8 +14,17 @@ from attrs_strict import type_validator
 from marshmallow import Schema, SchemaOpts, fields, post_dump
 from marshmallow_enum import EnumField
 
+class IncomeSourceLabels(Enum):
+    """ Maps income source ratio keys to labels. Used for display purposes."""
+    
+    total_allocations_income_ratio = "אחוז הכנסות מהקצאות"
+    total_donations_income_ratio = "אחוז הכנסות מתרומות"
+    total_service_income_ratio = "אחוז הכנסות משירותים"
+    total_other_income_ratio = "אחוז הכנסות ממקורות אחרים"
+    
 
 class TurnoverCategory(Enum):
+    """ Maps yearly turnover to categories. Used for ranking and display purposes"""
     CAT_500K = (0, 500_000, "100K-500K ₪")
     CAT_1M = (500_000, 1_000_000, "500K-1M ₪")
     CAT_3M = (1_000_000, 3_000_000, "1M-3M ₪")
@@ -68,6 +77,7 @@ class NgoTopRecipientsSalaries:
 
 @attr.s(frozen=True, auto_attribs=True, field_transformer=_add_type_validator)
 class NgoGeneralInfo:
+    ngo_id: int = attr.ib(converter=int)
     ngo_name: str
     ngo_year_founded: Optional[int] = None
     ngo_goal: Optional[str] = None
@@ -126,6 +136,7 @@ class NgoFinanceInfo:
     # yearly_turnover: Union[int, float] = attr.ib(init=False)
     balance_ratio: Union[int, float] = attr.ib(init=False)
     max_income_ratio: Union[int, float] = attr.ib(init=False)
+    growth_ratio: Union[int, float] = attr.ib(init=False)
 
     @total_allocations_income.default
     def _total_allocations_income(self) -> Union[int, float]:
@@ -184,12 +195,6 @@ class NgoFinanceInfo:
     def yearly_turnover_category_label(self) -> str:
         return self.yearly_turnover_category.label
 
-    # 1. spread ratio stability
-    # 2. Custom color per category rank
-    # 3. Cell for max stability rank cat
-    # 4. deicit -> profitability
-    # 5. OCR / Current data
-
     # ------------ Ratios ------------
     @total_allocations_income_ratio.default
     def _total_allocations_income_ratio(self) -> Union[int, float]:
@@ -232,8 +237,7 @@ class NgoFinanceInfo:
         ratio_keys = ["total_allocations_income_ratio", "total_donations_income_ratio",
                       "total_service_income_ratio", "total_other_income_ratio"]
 
-        def get_data_key(key): return UnrankedNGOResult._declared_fields[key].data_key
-        return {get_data_key(key): getattr(self, key) for key in ratio_keys}
+        return {IncomeSourceLabels[key].name: getattr(self, key) for key in ratio_keys}
 
     @max_income_ratio.default
     def _max_income_ratio(self) -> float:
@@ -301,22 +305,9 @@ class NgoInfo:
         ),
     )
 
-    @property
-    def main_finance_report_idx(self) -> Optional[int]:
-        if not self.financial_info:
-            return None
-        for idx, f_info in enumerate(self.financial_info):
-            # We only support 2020 report year at the moment
-            if f_info.report_year == 2020:
-                return idx
-        return None
-
     @cached_property
     def last_financial_info(self) -> Optional[NgoFinanceInfo]:
-        if not self.main_finance_report_idx:
-            return None
-        # We don't support 2021 report year at the moment
-        return self.financial_info[self.main_finance_report_idx]
+        return self.financial_info[-1] if self.financial_info else None
 
     @cached_property
     def last_financial_report_year(self) -> Optional[int]:
@@ -339,32 +330,18 @@ class NgoInfo:
             return -0.25
 
         # financial_history: reversed financial_info, 1st is last year
-        financial_history = self.financial_info[self.main_finance_report_idx::-1]
-        if len(financial_history) < 2:
+        if len(self.financial_info) < 2:
             return 1.
 
         # First turnover either 1 or 2 years back
-        year_diff = 1 if len(financial_history) == 2 else 2
+        year_diff = 1 if len(self.financial_info) == 2 else 2
         for _ in range(1):
-            first_turnover = financial_history[year_diff].yearly_turnover
+            first_turnover = self.financial_info[year_diff].yearly_turnover
             if first_turnover >= 25_000:
                 return (last_turnover / first_turnover)**(1 / year_diff) - 1
             year_diff -= 1
         return 1.
 
-    # TODO: Refactor out
-
-    @property
-    def yearly_turnover_2020(self) -> None:
-        return None
-
-    @property
-    def yearly_turnover_2019(self) -> None:
-        return None
-
-    @property
-    def yearly_turnover_2018(self) -> None:
-        return None
 
     @classmethod
     def from_resource_items(cls, ngo_id: int, resources_items: dict) -> "NgoInfo":
@@ -399,17 +376,32 @@ class NgoTopRecipientsSalariesSchema(OrderedSchema):
     top_earners_salaries = fields.Nested(NgoTopRecipientSalarySchema, many=True)
 
 
+class NgoGeneralInfoSchema(OrderedSchema):
+    ngo_id = fields.Int()
+    ngo_name = fields.String()
+    ngo_year_founded = fields.Int(allow_none=True)
+    ngo_goal = fields.String(allow_none=True)
+    volunteers_num = fields.Int(allow_none=True)
+    employees_num = fields.Int(allow_none=True)
+    ngo_members_num = fields.Int(allow_none=True)
+
+    main_activity_field = fields.String(allow_none=True)
+    activity_fields = fields.List(fields.String(), allow_none=True)
+    target_audience = fields.List(fields.String(), allow_none=True)
+
+
 class NgoFinanceInfoSchema(OrderedSchema):
     ngo_id = fields.Int()
     report_year = fields.Int()
 
     yearly_turnover = fields.Number()
     yearly_turnover_category = EnumField(TurnoverCategory)
+    yearly_turnover_category_label = fields.String()
     # ------------ Ratios ------------
     balance_ratio = fields.Number()
-    # ------------ Ratios ------------
     program_expense_ratio = fields.Number(allow_none=True)
     admin_expense_ratio = fields.Number(allow_none=True)
+    max_income_ratio = fields.Number()
     total_allocations_income_ratio = fields.Number()
     total_donations_income_ratio = fields.Number()
     total_service_income_ratio = fields.Number()
@@ -439,220 +431,229 @@ class NgoFinanceInfoSchema(OrderedSchema):
     other_expenses_for_activities = fields.Number()
     expenses_for_activities = fields.Number()
     donations_of_monetary_value = fields.Number()
+    annual_balance = fields.Number()
 
 
-CURRENT_YEAR = datetime.now().year
-
-NGO_FINANCE_DYNAMIC_KEYS = {
-    "yearly_turnover": "מחזור שנתי",
-}
 
 
-class UnrankedNGOResult(OrderedSchema):
-    """Flatten schema for NgoInfo"""
 
-    # Org
-    ngo_id = fields.Int(data_key="מזהה עמותה")
-    ngo_name = fields.Str(attribute="general_info.ngo_name", allow_none=True, data_key="שם עמותה")
-    main_activity_field = fields.Str(
-        attribute="general_info.main_activity_field", allow_none=True, data_key="תחום פעילות מרכזי")
-    last_financial_report_year = fields.Integer(
-        attribute="last_financial_report_year", data_key="שנת דוח כספי אחרון")
-    yearly_turnover_category_label = fields.String(
-        attribute="last_financial_info.yearly_turnover_category_label", allow_none=True,
-        data_key="קטגוריית מחזור שנתי לשנת 2020",)
-    _ = fields.Str(dump_default=None)
+# REPORT_YEAR = 2020
 
-    # -- Ranks --
-    main_rank_benchmark = fields.Number(dump_default=None,
-                                        data_key="ציון ממוצע לקטגורית מחזור")
-    main_rank = fields.Number(dump_default=None,
-                              data_key="ציון כלכלי משוקלל לשנת 2020")
 
-    percentile_num = fields.Integer(allow_none=True, dump_default=None,
-                                    data_key="מספר חמישיון")
-    percentile_label = fields.String(allow_none=True, dump_default=None,
-                                     data_key="חמישיון ביחס לקטגורית מחזור")
+# CURRENT_YEAR = datetime.now().year
 
-    __ = fields.Str(dump_default=None)
-    # -- Sub Ranks --
-    growth_rank = fields.Number(dump_default=None,
-                                data_key="ציון 2020- צמיחה")
-    balance_rank = fields.Number(dump_default=None,
-                                 data_key="ציון 2020- גירעון/יתרה")
-    stability_rank = fields.Number(dump_default=None,
-                                   data_key="ציון 2020- גיוון מקורות הכנסה")
-    ___ = fields.Str(dump_default=None)
+# NGO_FINANCE_DYNAMIC_KEYS = {
+#     "yearly_turnover": "מחזור שנתי",
+# }
 
-    admin_expense_ratio = fields.Number(
-        attribute="last_financial_info.admin_expense_ratio", allow_none=True,
-        data_key="אחוז הוצאות עבור הנהלה")
-    admin_expense_benchmark = fields.Number(
-        dump_default=None,
-        data_key="בנצמרק אחוז הנהלה")
-    ____ = fields.Str(dump_default=None)
-    # -----------------------------------------------------------------------------------------------------------------------------------------------
 
-    # Growth params---------------
-    growth_benchmark = fields.Number(
-        dump_default=None,
-        data_key="בנצמרק צמיחה")
-    growth_ratio = fields.Number(attribute="growth_ratio", data_key="אחוז צמיחה - 2020-2018")
-    # TODO: dynamic data_key year
-    yearly_turnover_2020 = fields.Number(load_default=0, data_key="מחזור שנתי לשנת 2020")
-    yearly_turnover_2019 = fields.Number(load_default=0, data_key="מחזור שנתי לשנת 2019")
-    yearly_turnover_2018 = fields.Number(load_default=0, data_key="מחזור שנתי לשנת 2018")
-    _____ = fields.Str(dump_default=None)
-    # -----------------------------------------------------------------------------------------------------------------------------------------------
+# class UnrankedNGOResult(OrderedSchema):
+#     """**DEPRECATED**. Use RankedNGOResult instead.
+#     Flatten schema for NgoInfo"""
 
-    # Profit Params-------------------
-    balance_benchmark = fields.Number(dump_default=None, data_key="בנצמרק גרעון")
-    balance_ratio = fields.Number(attribute="last_financial_info.balance_ratio",
-                                  data_key="אחוז יתרה לשנת 2020")
-    last_annual_balance = fields.Number(attribute="last_financial_info.annual_balance",
-                                        data_key="יתרה לשנת 2020")
-    ______ = fields.Str(dump_default=None)
-    # -----------------------------------------------------------------------------------------------------------------------------------------------
+#     # Org
+#     ngo_id = fields.Int(data_key="מזהה עמותה")
+#     ngo_name = fields.Str(attribute="general_info.ngo_name", allow_none=True, data_key="שם עמותה")
+#     main_activity_field = fields.Str(
+#         attribute="general_info.main_activity_field", allow_none=True, data_key="תחום פעילות מרכזי")
+#     last_financial_report_year = fields.Integer(
+#         attribute="last_financial_report_year", data_key="שנת דוח כספי אחרון")
+#     yearly_turnover_category_label = fields.String(
+#         attribute="last_financial_info.yearly_turnover_category_label", allow_none=True,
+#         data_key=f"קטגוריית מחזור שנתי לשנת {REPORT_YEAR}",)
+#     _ = fields.Str(dump_default=None)
 
-    # Stability Params
-    max_income_benchmark = fields.Number(
-        dump_default=None,
-        data_key="בנצמרק גיוון")
-    max_income_source_label = fields.String(
-        attribute="last_financial_info.max_income_source_label", allow_none=True,
-        data_key="מקור הכנסה מרכזי")
-    max_income_ratio = fields.Number(
-        attribute="last_financial_info.max_income_ratio", allow_none=True,
-        data_key="אחוז מקור הכנסה מרכזי ביחס לסך הכנסות")
+#     # -- Ranks --
+#     main_rank_benchmark = fields.Number(dump_default=None,
+#                                         data_key="ציון ממוצע לקטגורית מחזור")
+#     main_rank = fields.Number(dump_default=None,
+#                               data_key=f"ציון כלכלי משוקלל לשנת {REPORT_YEAR}")
 
-    # Income sources ratios
-    total_allocations_income_ratio = fields.Number(
-        attribute="last_financial_info.total_allocations_income_ratio", allow_none=True, data_key="אחוז הכנסות מהקצאות")
-    total_donations_income_ratio = fields.Number(
-        attribute="last_financial_info.total_donations_income_ratio", allow_none=True, data_key="אחוז הכנסות מתרומות")
-    total_service_income_ratio = fields.Number(
-        attribute="last_financial_info.total_service_income_ratio", allow_none=True, data_key="אחוז הכנסות מפעילות")
-    total_other_income_ratio = fields.Number(
-        attribute="last_financial_info.total_other_income_ratio", allow_none=True, data_key="אחוז הכנסות אחרות")
-    # Computed totals
-    total_allocations_income = fields.Number(
-        attribute="last_financial_info.total_allocations_income", data_key="הכנסות מהקצאות")
-    total_donations_income = fields.Number(
-        attribute="last_financial_info.total_donations_income", data_key="הכנסות מתרומות")
-    total_service_income = fields.Number(
-        attribute="last_financial_info.total_service_income", data_key="הכנסות מפעילות")
-    total_other_income = fields.Number(
-        attribute="last_financial_info.total_other_income", data_key="הכנסות אחרות")
-    _______ = fields.Str(dump_default=None)
+#     percentile_num = fields.Integer(allow_none=True, dump_default=None,
+#                                     data_key="מספר חמישיון")
+#     percentile_label = fields.String(allow_none=True, dump_default=None,
+#                                      data_key="חמישיון ביחס לקטגורית מחזור")
 
-    # -----------------------------------------------------------------------------------------------------------------------------------------------
-    # Mangemnet
-    expenses_for_management = fields.Number(
-        attribute="last_financial_info.expenses_for_management"
-    )
-    expenses_salary_for_management = fields.Number(
-        attribute="last_financial_info.expenses_salary_for_management"
-    )
-    ________ = fields.Str(dump_default=None)
-    # -----------------------------------------------------------------------------------------------------------------------------------------------
+#     __ = fields.Str(dump_default=None)
+#     # -- Sub Ranks --
+#     growth_rank = fields.Number(dump_default=None,
+#                                 data_key=f"ציון {REPORT_YEAR}- צמיחה")
+#     balance_rank = fields.Number(dump_default=None,
+#                                  data_key=f"ציון {REPORT_YEAR}- גירעון/יתרה")
+#     stability_rank = fields.Number(dump_default=None,
+#                                    data_key=f"ציון {REPORT_YEAR}- גיוון מקורות הכנסה")
+#     ___ = fields.Str(dump_default=None)
 
-    # Unused Params
-    ngo_year_founded = fields.Integer(
-        attribute="general_info.ngo_year_founded", allow_none=True, data_key="שנת הקמה",
-    )
+#     admin_expense_ratio = fields.Number(
+#         attribute="last_financial_info.admin_expense_ratio", allow_none=True,
+#         data_key="אחוז הוצאות עבור הנהלה")
+#     admin_expense_benchmark = fields.Number(
+#         dump_default=None,
+#         data_key="בנצמרק אחוז הנהלה")
+#     ____ = fields.Str(dump_default=None)
+#     # -----------------------------------------------------------------------------------------------------------------------------------------------
 
-    volunteers_num = fields.Integer(
-        attribute="general_info.volunteers_num", allow_none=True, data_key="מספר מתנדבים"
-    )
-    employees_num = fields.Integer(attribute="general_info.employees_num", allow_none=True, data_key="מספר עובדים")
-    ngo_members_num = fields.Integer(
-        attribute="general_info.ngo_members_num", allow_none=True, data_key="מספר חברים")
+#     # Growth params---------------
+#     growth_benchmark = fields.Number(
+#         dump_default=None,
+#         data_key="בנצמרק צמיחה")
+#     growth_ratio = fields.Number(attribute="growth_ratio", data_key=f"אחוז צמיחה - {REPORT_YEAR}-{REPORT_YEAR-2}")
+#     # TODO: dynamic data_key year
+#     yearly_turnover_2021 = fields.Number(load_default=0, data_key="מחזור שנתי לשנת 2021")
+#     yearly_turnover_2020 = fields.Number(load_default=0, data_key="מחזור שנתי לשנת 2020")
+#     yearly_turnover_2019 = fields.Number(load_default=0, data_key="מחזור שנתי לשנת 2019")
+#     yearly_turnover_2018 = fields.Number(load_default=0, data_key="מחזור שנתי לשנת 2018")
+#     _____ = fields.Str(dump_default=None)
+#     # -----------------------------------------------------------------------------------------------------------------------------------------------
 
-    target_audience = fields.List(
-        fields.Str(), attribute="general_info.target_audience", allow_none=True, data_key="קהל יעד")
-    activity_fields = fields.List(
-        fields.Str(), attribute="general_info.activity_fields", allow_none=True, data_key="תחומי פעילות")
-    ngo_goal = fields.Str(attribute="general_info.ngo_goal", allow_none=True, data_key="מטרת העמותה")
-    _________ = fields.Str(dump_default=None)
+#     # Profit Params-------------------
+#     balance_benchmark = fields.Number(dump_default=None, data_key="בנצמרק גרעון")
+#     balance_ratio = fields.Number(attribute="last_financial_info.balance_ratio",
+#                                   data_key=f"אחוז יתרה לשנת {REPORT_YEAR}")
+#     last_annual_balance = fields.Number(attribute="last_financial_info.annual_balance",
+#                                         data_key=f"יתרה לשנת {REPORT_YEAR}")
+#     ______ = fields.Str(dump_default=None)
+#     # -----------------------------------------------------------------------------------------------------------------------------------------------
 
-    # Additional ratios
-    program_expense_ratio = fields.Number(
-        attribute="last_financial_info.program_expense_ratio", allow_none=True, data_key="אחוז הוצאות עבור פעילות")
+#     # Stability Params
+#     max_income_benchmark = fields.Number(
+#         dump_default=None,
+#         data_key="בנצמרק גיוון")
+#     max_income_source_label = fields.String(
+#         attribute="last_financial_info.max_income_source_label", allow_none=True,
+#         data_key="מקור הכנסה מרכזי")
+#     max_income_ratio = fields.Number(
+#         attribute="last_financial_info.max_income_ratio", allow_none=True,
+#         data_key="אחוז מקור הכנסה מרכזי ביחס לסך הכנסות")
 
-    total_expenses = fields.Number(attribute="last_financial_info.total_expenses", data_key='סה"כ הוצאות')
+#     # Income sources ratios
+#     total_allocations_income_ratio = fields.Number(
+#         attribute="last_financial_info.total_allocations_income_ratio", allow_none=True, data_key="אחוז הכנסות מהקצאות")
+#     total_donations_income_ratio = fields.Number(
+#         attribute="last_financial_info.total_donations_income_ratio", allow_none=True, data_key="אחוז הכנסות מתרומות")
+#     total_service_income_ratio = fields.Number(
+#         attribute="last_financial_info.total_service_income_ratio", allow_none=True, data_key="אחוז הכנסות מפעילות")
+#     total_other_income_ratio = fields.Number(
+#         attribute="last_financial_info.total_other_income_ratio", allow_none=True, data_key="אחוז הכנסות אחרות")
+#     # Computed totals
+#     total_allocations_income = fields.Number(
+#         attribute="last_financial_info.total_allocations_income", data_key="הכנסות מהקצאות")
+#     total_donations_income = fields.Number(
+#         attribute="last_financial_info.total_donations_income", data_key="הכנסות מתרומות")
+#     total_service_income = fields.Number(
+#         attribute="last_financial_info.total_service_income", data_key="הכנסות מפעילות")
+#     total_other_income = fields.Number(
+#         attribute="last_financial_info.total_other_income", data_key="הכנסות אחרות")
+#     _______ = fields.Str(dump_default=None)
 
-    financial_info_history = fields.List(
-        fields.Nested(NgoFinanceInfoSchema), attribute="financial_info"
-    )
-    # top_earners_info_history = fields.List(
-    #     fields.Nested(NgoTopRecipientsSalariesSchema), attribute="top_earners_info"
-    # )
+#     # -----------------------------------------------------------------------------------------------------------------------------------------------
+#     # Mangemnet
+#     expenses_for_management = fields.Number(
+#         attribute="last_financial_info.expenses_for_management"
+#     )
+#     expenses_salary_for_management = fields.Number(
+#         attribute="last_financial_info.expenses_salary_for_management"
+#     )
+#     ________ = fields.Str(dump_default=None)
+#     # -----------------------------------------------------------------------------------------------------------------------------------------------
 
-    # Detailed financial info
-    expenses_other = fields.Number(attribute="last_financial_info.expenses_other")
-    expenses_for_activities = fields.Number(
-        attribute="last_financial_info.expenses_for_activities"
-    )
-    expenses_salary_for_activities = fields.Number(
-        attribute="last_financial_info.expenses_salary_for_activities"
-    )
-    other_expenses_for_activities = fields.Number(
-        attribute="last_financial_info.other_expenses_for_activities"
-    )
+#     # Unused Params
+#     ngo_year_founded = fields.Integer(
+#         attribute="general_info.ngo_year_founded", allow_none=True, data_key="שנת הקמה",
+#     )
 
-    allocations_from_government = fields.Number(
-        attribute="last_financial_info.allocations_from_government"
-    )
-    allocations_from_local_authority = fields.Number(
-        attribute="last_financial_info.allocations_from_local_authority"
-    )
-    allocations_from_other_sources = fields.Number(
-        attribute="last_financial_info.allocations_from_other_sources"
-    )
+#     volunteers_num = fields.Integer(
+#         attribute="general_info.volunteers_num", allow_none=True, data_key="מספר מתנדבים"
+#     )
+#     employees_num = fields.Integer(attribute="general_info.employees_num", allow_none=True, data_key="מספר עובדים")
+#     ngo_members_num = fields.Integer(
+#         attribute="general_info.ngo_members_num", allow_none=True, data_key="מספר חברים")
 
-    donations_from_aboard = fields.Number(
-        attribute="last_financial_info.donations_from_aboard"
-    )
-    donations_from_israel = fields.Number(
-        attribute="last_financial_info.donations_from_israel"
-    )
-    donations_of_monetary_value = fields.Number(
-        attribute="last_financial_info.donations_of_monetary_value"
-    )
+#     target_audience = fields.List(
+#         fields.Str(), attribute="general_info.target_audience", allow_none=True, data_key="קהל יעד")
+#     activity_fields = fields.List(
+#         fields.Str(), attribute="general_info.activity_fields", allow_none=True, data_key="תחומי פעילות")
+#     ngo_goal = fields.Str(attribute="general_info.ngo_goal", allow_none=True, data_key="מטרת העמותה")
+#     _________ = fields.Str(dump_default=None)
 
-    service_income_from_country = fields.Number(
-        attribute="last_financial_info.service_income_from_country"
-    )
-    service_income_from_local_authority = fields.Number(
-        attribute="last_financial_info.service_income_from_local_authority"
-    )
-    service_income_from_other = fields.Number(
-        attribute="last_financial_info.service_income_from_other"
-    )
-    other_income_from_other_sources = fields.Number(
-        attribute="last_financial_info.other_income_from_other_sources"
-    )
-    other_income_members_fee = fields.Number(
-        attribute="last_financial_info.other_income_members_fee"
-    )
+#     # Additional ratios
+#     program_expense_ratio = fields.Number(
+#         attribute="last_financial_info.program_expense_ratio", allow_none=True, data_key="אחוז הוצאות עבור פעילות")
 
-    @post_dump
-    def dump_schema(self, data: dict, **kwargs) -> dict:
-        """
-        Add dynamic financial fields to the schema
-        """
-        # We copy the data dict to avoid modifying the original OrderedDict
-        data_copy = data.copy()
-        for field_name, values in data.items():
-            if field_name != "financial_info_history":
-                continue
+#     total_expenses = fields.Number(attribute="last_financial_info.total_expenses", data_key='סה"כ הוצאות')
 
-            for report in values:
-                for key, label in NGO_FINANCE_DYNAMIC_KEYS.items():
-                    data_copy[f"{label} לשנת {report['report_year']}"] = report[
-                        key
-                    ]
+#     financial_info_history = fields.List(
+#         fields.Nested(NgoFinanceInfoSchema), attribute="financial_info"
+#     )
+#     # top_earners_info_history = fields.List(
+#     #     fields.Nested(NgoTopRecipientsSalariesSchema), attribute="top_earners_info"
+#     # )
 
-        # Delete to reduce response size
-        del data_copy["financial_info_history"]
-        return data_copy
+#     # Detailed financial info
+#     expenses_other = fields.Number(attribute="last_financial_info.expenses_other")
+#     expenses_for_activities = fields.Number(
+#         attribute="last_financial_info.expenses_for_activities"
+#     )
+#     expenses_salary_for_activities = fields.Number(
+#         attribute="last_financial_info.expenses_salary_for_activities"
+#     )
+#     other_expenses_for_activities = fields.Number(
+#         attribute="last_financial_info.other_expenses_for_activities"
+#     )
+
+#     allocations_from_government = fields.Number(
+#         attribute="last_financial_info.allocations_from_government"
+#     )
+#     allocations_from_local_authority = fields.Number(
+#         attribute="last_financial_info.allocations_from_local_authority"
+#     )
+#     allocations_from_other_sources = fields.Number(
+#         attribute="last_financial_info.allocations_from_other_sources"
+#     )
+
+#     donations_from_aboard = fields.Number(
+#         attribute="last_financial_info.donations_from_aboard"
+#     )
+#     donations_from_israel = fields.Number(
+#         attribute="last_financial_info.donations_from_israel"
+#     )
+#     donations_of_monetary_value = fields.Number(
+#         attribute="last_financial_info.donations_of_monetary_value"
+#     )
+
+#     service_income_from_country = fields.Number(
+#         attribute="last_financial_info.service_income_from_country"
+#     )
+#     service_income_from_local_authority = fields.Number(
+#         attribute="last_financial_info.service_income_from_local_authority"
+#     )
+#     service_income_from_other = fields.Number(
+#         attribute="last_financial_info.service_income_from_other"
+#     )
+#     other_income_from_other_sources = fields.Number(
+#         attribute="last_financial_info.other_income_from_other_sources"
+#     )
+#     other_income_members_fee = fields.Number(
+#         attribute="last_financial_info.other_income_members_fee"
+#     )
+
+#     @post_dump
+#     def dump_schema(self, data: dict, **kwargs) -> dict:
+#         """
+#         Add dynamic financial fields to the schema
+#         """
+#         # We copy the data dict to avoid modifying the original OrderedDict
+#         data_copy = data.copy()
+#         for field_name, values in data.items():
+#             if field_name != "financial_info_history":
+#                 continue
+
+#             for report in values:
+#                 for key, label in NGO_FINANCE_DYNAMIC_KEYS.items():
+#                     data_copy[f"{label} לשנת {report['report_year']}"] = report[
+#                         key
+#                     ]
+
+#         # Delete to reduce response size
+#         del data_copy["financial_info_history"]
+#         return data_copy
