@@ -21,7 +21,7 @@ FEED_EXPORT_ENCODING = "utf-8"
 ROBOTSTXT_OBEY = True
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
-# CONCURRENT_REQUESTS = 32
+CONCURRENT_REQUESTS = 1024
 
 # Configure a delay for requests for the same website (default: 0)
 # See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
@@ -64,11 +64,10 @@ ROBOTSTXT_OBEY = True
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-    "cfi_midot.pipelines.GuideStarMultiCSVExporter": 300,
+    "cfi_midot.pipelines.GuideStarMultiCSVExporter": 100,
 }
-LOG_LEVEL = 'INFO'
-CONCURRENT_REQUESTS = 400
-REACTOR_THREADPOOL_MAXSIZE = 80
+LOG_LEVEL = "INFO"
+REACTOR_THREADPOOL_MAXSIZE = 256
 
 
 # Enable and configure the AutoThrottle extension (disabled by default)

@@ -14,17 +14,28 @@ from attrs_strict import type_validator
 from marshmallow import Schema, SchemaOpts, fields, post_dump
 from marshmallow_enum import EnumField
 
+
 class IncomeSourceLabels(Enum):
-    """ Maps income source ratio keys to labels. Used for display purposes."""
-    
+    """Maps income source ratio keys to labels. Used for display purposes."""
+
+    total_allocations_income_ratio = "הכנסות מהקצאות"
+    total_donations_income_ratio = "הכנסות מתרומות"
+    total_service_income_ratio = "הכנסות משירותים"
+    total_other_income_ratio = "הכנסות ממקורות אחרים"
+
+
+class IncomeSourceRatioLabels(Enum):
+    """Maps income source ratio keys to labels. Used for display purposes."""
+
     total_allocations_income_ratio = "אחוז הכנסות מהקצאות"
     total_donations_income_ratio = "אחוז הכנסות מתרומות"
     total_service_income_ratio = "אחוז הכנסות משירותים"
     total_other_income_ratio = "אחוז הכנסות ממקורות אחרים"
-    
+
 
 class TurnoverCategory(Enum):
-    """ Maps yearly turnover to categories. Used for ranking and display purposes"""
+    """Maps yearly turnover to categories. Used for ranking and display purposes"""
+
     CAT_500K = (0, 500_000, "100K-500K ₪")
     CAT_1M = (500_000, 1_000_000, "500K-1M ₪")
     CAT_3M = (1_000_000, 3_000_000, "1M-3M ₪")
@@ -234,10 +245,22 @@ class NgoFinanceInfo:
     @property
     def income_source_ratios(self) -> dict[str, float]:
         # Returens `ratio_keys` as label: value dict
-        ratio_keys = ["total_allocations_income_ratio", "total_donations_income_ratio",
-                      "total_service_income_ratio", "total_other_income_ratio"]
+        ratio_keys = [
+            "total_allocations_income_ratio",
+            "total_donations_income_ratio",
+            "total_service_income_ratio",
+            "total_other_income_ratio",
+        ]
 
-        return {IncomeSourceLabels[key].name: getattr(self, key) for key in ratio_keys}
+        return {
+            IncomeSourceRatioLabels[key].value.replace("אחוז ", ""): getattr(self, key)
+            for key in ratio_keys
+        }
+
+    # return {
+    #     f"{IncomeSourceRatioLabels[key].name}": getattr(self, key)
+    #     for key in ratio_keys
+    # }
 
     @max_income_ratio.default
     def _max_income_ratio(self) -> float:
@@ -252,7 +275,7 @@ class NgoFinanceInfo:
         # Annual profit made
         if not self.yearly_turnover:
             return 0
-        return (self.yearly_turnover - self.total_expenses)
+        return self.yearly_turnover - self.total_expenses
 
     @balance_ratio.default
     def _balance_ratio(self) -> Union[int, float]:
@@ -277,8 +300,7 @@ class NgoFinanceInfo:
     def _admin_expense_ratio(self) -> Optional[float | int]:
 
         total_administrative_expenses = (
-            self.expenses_salary_for_management
-            + self.expenses_for_management
+            self.expenses_salary_for_management + self.expenses_for_management
         )
 
         if total_administrative_expenses == 0 or self.yearly_turnover == 0:
@@ -322,26 +344,29 @@ class NgoInfo:
 
         return self.top_earners_info[-1]
 
-# ---------------- computed ------------------
+    # ---------------- computed ------------------
     @property
     def growth_ratio(self) -> float:
-        last_turnover = self.last_financial_info.yearly_turnover if self.last_financial_info else None
+        last_turnover = (
+            self.last_financial_info.yearly_turnover
+            if self.last_financial_info
+            else None
+        )
         if not last_turnover:
             return -0.25
 
         # financial_history: reversed financial_info, 1st is last year
         if len(self.financial_info) < 2:
-            return 1.
+            return 1.0
 
         # First turnover either 1 or 2 years back
         year_diff = 1 if len(self.financial_info) == 2 else 2
         for _ in range(1):
             first_turnover = self.financial_info[year_diff].yearly_turnover
             if first_turnover >= 25_000:
-                return (last_turnover / first_turnover)**(1 / year_diff) - 1
+                return (last_turnover / first_turnover) ** (1 / year_diff) - 1
             year_diff -= 1
-        return 1.
-
+        return 1.0
 
     @classmethod
     def from_resource_items(cls, ngo_id: int, resources_items: dict) -> "NgoInfo":
@@ -349,6 +374,7 @@ class NgoInfo:
 
 
 # ------------------------------------------------ Display Schemas ------------------------------------------------
+
 
 class OrderedSchema(Schema):
     class OrderedOpts(SchemaOpts):
@@ -402,6 +428,7 @@ class NgoFinanceInfoSchema(OrderedSchema):
     program_expense_ratio = fields.Number(allow_none=True)
     admin_expense_ratio = fields.Number(allow_none=True)
     max_income_ratio = fields.Number()
+    max_income_source_label = fields.String()
     total_allocations_income_ratio = fields.Number()
     total_donations_income_ratio = fields.Number()
     total_service_income_ratio = fields.Number()
@@ -432,9 +459,6 @@ class NgoFinanceInfoSchema(OrderedSchema):
     expenses_for_activities = fields.Number()
     donations_of_monetary_value = fields.Number()
     annual_balance = fields.Number()
-
-
-
 
 
 # REPORT_YEAR = 2020
