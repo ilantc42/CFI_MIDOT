@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "ngo_toolkit"
+version = "0.1.0"
+description = "CFI-MIDOT project to scrape and rank NGOs in Israel"
+authors = ["i.tchenak@gmail.com"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+Scrapy = "^2.11.2"
+attrs_strict = "^1.0.1"
+marshmallow = "^3.21.0"
+marshmallow-enum = "^1.5.1"
+requests = "^2.32.3"
+pandas = "^2.1.1"
+google-auth = "^2.22.0"
+google-api-python-client = "^2.24.0"
+pydantic-settings = "^2.8.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,4 +1,0 @@
-Scrapy==2.5.1
-attrs_strict
-marshmallow
-marshmallow-enum

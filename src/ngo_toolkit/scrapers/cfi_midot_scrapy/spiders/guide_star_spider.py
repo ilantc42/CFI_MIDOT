@@ -4,8 +4,11 @@ import re
 from typing import Callable, Iterator, Union
 
 import scrapy
-from cfi_midot.items import NgoInfo
-from cfi_midot.items_loaders import RESOURCE_NAME_TO_METHOD_NAME, load_ngo_info
+from ngo_toolkit.scrapers.cfi_midot_scrapy.items import NgoInfo
+from ngo_toolkit.scrapers.cfi_midot_scrapy.items_loaders import (
+    RESOURCE_NAME_TO_METHOD_NAME,
+    load_ngo_info,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -104,7 +104,7 @@ def rank_ngos(financial_df: DataFrameGroupBy) -> List[pd.DataFrame]:
     merged_df = pd.DataFrame()
     # Merge the grouped financial reports for each year
     for year in financial_df.groups.keys():
-        group = financial_df.get_group(year)
+        group = financial_df.get_group((year,))
         # Get the financial reports for the current year
         if merged_df.empty:
             merged_df = group
@@ -121,7 +121,7 @@ def rank_ngos(financial_df: DataFrameGroupBy) -> List[pd.DataFrame]:
 
     for year in years_to_rank:
         # Get the financial reports for the current year
-        financial_info = financial_df.get_group(year)
+        financial_info = financial_df.get_group((year,))
         # Add Multi-years ratios
         growth_ratios = merged_df.apply(
             lambda row: compute_turnover_growth_ratio(

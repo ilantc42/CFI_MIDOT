@@ -1,36 +1,35 @@
-from os import environ
 import pandas as pd
-from google_sheet import upload_spread_sheet
-from ngo_list import ngos_ids
-import csv
+from ngo_toolkit.uploaders.google_sheet import upload_spread_sheet
+from ngo_toolkit.scrapers.api_interaction import download_registered_ngos_ids
 
-from ranking_service import rank_ngos
+from ngo_toolkit.ranking.ranking_service import rank_ngos
+from ngo_toolkit.settings import settings
 
-FINANCIAL_REPORT_FNAME = "NgoFinanceInfo"
-RANKED_FNAME = environ["RANKED_NGO_FNAME"]
-
+FINANCIAL_REPORT_SHEET_NAME = "NgoFinanceInfo"
+GENERAL_REPORT_SHEET_NAME = "NgoGeneralInfo"
+RANKED_NGO_SHEET_NAME = settings.RANKED_NGO_SHEET_NAME
 
 def scrape_ngo_finance(ngos_ids: list[int]) -> None:
     from scrapy.crawler import CrawlerProcess
     from scrapy.utils.project import get_project_settings
-    from cfi_midot.spiders.guide_star_spider import GuideStarSpider
+    from ngo_toolkit.scrapers.cfi_midot_scrapy.spiders.guide_star_spider import GuideStarSpider
 
     process = CrawlerProcess(get_project_settings())
+
     process.crawl(GuideStarSpider, ngos_ids)
+
     process.start()
 
 
-if __name__ == "__main__":
-    # with open('./ngos_to_scrape.csv', newline='') as f:
-    #     rows = list(csv.reader(f))
-    #     if rows:
-    #         ngos_ids -= set(rows[0]) # type: ignore
+def main():
+    # # Download latest registered NGOs from https://data.gov.il/dataset/moj-amutot
+    ngos_ids = download_registered_ngos_ids()
 
-    # Scrape ngos
-    scrape_ngo_finance(list(ngos_ids))
+    # # Scrape ngos
+    scrape_ngo_finance(ngos_ids)
 
     # Load yearly financial reports for each NGO (FINANCIAL_FNAME), group by ngo_id
-    financial_df = pd.read_csv(f"./results/{FINANCIAL_REPORT_FNAME}.csv")
+    financial_df = pd.read_csv(f"data/{FINANCIAL_REPORT_SHEET_NAME}.csv")
 
     # Sort the financial reports by year and group by report_year
     # Each group is sorted by year in descending order
@@ -42,12 +41,16 @@ if __name__ == "__main__":
 
     # Publish the results to a google spreadsheet
     # Update spreadsheets
-    ngo_general_info = pd.read_csv(f"./results/NgoGeneralInfo.csv")
+    ngo_general_info = pd.read_csv(f"data/{GENERAL_REPORT_SHEET_NAME}.csv")
     upload_spread_sheet(ngo_general_info, ranked_dfs)
 
     # Save the ranks for each year to a separate csv file
     for ranked_df in ranked_dfs:
         ranked_df.to_csv(
-            f"./results/{RANKED_FNAME}_{ranked_df['report_year'].iloc[0]}.csv",
+            f"data/{RANKED_NGO_SHEET_NAME}_{ranked_df['report_year'].iloc[0]}.csv",
             index=False,
         )
+
+
+if __name__ == "__main__":
+    main()

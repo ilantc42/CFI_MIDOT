@@ -1,7 +1,9 @@
 *.egg-info
 __pycache__
 .vscode
-results/*
+data/*
 *.json
 .python-version
 /app
+build
+poetry.lock
